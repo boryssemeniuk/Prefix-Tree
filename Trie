@@ -1,0 +1,663 @@
+unit Unit1;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls;
+
+type
+  TForm1 = class(TForm)
+    Panel1: TPanel;
+    ButtonAdd: TButton;
+    ButtonDelete: TButton;
+    ButtonFind: TButton;
+    Image1: TImage;
+    Label1: TLabel;
+    ComboBox1: TComboBox;
+    Show: TButton;
+    procedure FormCreate(Sender: TObject);
+    procedure ButtonAddClick(Sender: TObject);
+    procedure ButtonDeleteClick(Sender: TObject);
+    procedure ButtonFindClick(Sender: TObject);
+    procedure ShowClick(Sender: TObject);
+    procedure Label1Click(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+type pTrie = ^Trie;
+Trie = record
+    value:char;
+    X:integer;
+    Y:integer;
+    leaves:array of pTrie;
+  end;
+
+var
+  Form1: TForm1;
+  new_word, word_search, word_return:string;
+  flag, flagdelete, fword:boolean;
+  main_i, count:integer;
+  Tree:pTrie;
+  depth, level:integer;
+  floor:integer = 1;
+  arr:array of string;
+implementation
+
+{$R *.dfm}
+
+procedure Sort(var root:pTrie);
+var i,j:integer;
+    tmp:pTrie;
+begin
+  if root^.value = '#' then exit;
+  for I := High(root^.leaves) downto 0 do
+    for J := High(root^.leaves)-I-1 downto 0 do
+      begin
+        if root^.leaves[j].value > root^.leaves[j+1].value then
+          begin
+            tmp:=root^.leaves[j];
+            root^.leaves[j]:=root^.leaves[j+1];
+            root^.leaves[j+1]:=tmp;
+          end;
+      end;
+  for I := 0 to High(root^.leaves) do
+    Sort(root^.leaves[i]);
+end;
+
+
+procedure Add(var root:pTrie; str:string; depth,level:integer);
+var i,tmp,tmp2:integer;
+    flag,flag2:boolean;
+    tmp_root:pTrie;
+begin
+if (depth = length(str)) or (level = length(str)) then  exit;
+flag:=false;
+  for I := 0 to (High(root^.leaves)) do
+    begin
+      if root^.leaves[i] <> nil then
+        begin
+          flag:=true;
+          tmp:=i;
+        end;
+    end;
+  if flag = false then
+    begin
+      New(tmp_root);
+      if depth=level then
+        begin
+          tmp_root^.value:=str[depth+1];
+        end
+      else
+        begin
+          tmp_root^.value:=str[depth];
+        end;
+      Setlength(root^.leaves,length(root^.leaves)+1);
+      root^.leaves[0]:=tmp_root;
+    end;
+  if flag = true then
+    begin
+      flag2:=false;
+      for I := 0 to tmp do
+        begin
+        if (root^.leaves[i].value = str[level+1]) then
+          begin
+            tmp2:=i;
+            flag2:=true;
+            Add(root^.leaves[i],str,depth,level+1);
+          end;
+        end;
+      tmp2:=0;
+      if flag2 = false then
+        begin
+          New(tmp_root);
+          Setlength(root^.leaves,length(root^.leaves)+1);
+          if depth <= level then
+            begin
+              tmp_root^.value:=str[level+1]
+            end
+          else
+            begin
+              tmp_root^.value:=str[depth];
+            end;
+          root^.leaves[high(root^.leaves)]:=tmp_root;
+          if depth < level then depth:=level;
+        end;
+    end;
+
+  if (flag2 = true) and (depth<>level) then exit;
+  depth:=level;
+  if  length(str) > depth then
+    Add(root, str, depth+1,level);
+end;
+
+
+procedure CreateEllipse(X,Y:integer; C:string);
+begin
+  Form1.Image1.Canvas.Pen.Color := ClBlue;
+  Form1.Image1.Canvas.Brush.Color := ClWhite;
+  Form1.Image1.Canvas.Ellipse(X-15,Y-15,X+15,Y+15);
+  Form1.Image1.Canvas.TextOut(X-3,Y-6,C);
+end;
+procedure CreateLeaves(root:pTrie);
+var I: Integer;
+begin
+  for I := 0 to High(root^.leaves) do
+    begin
+      if root^.leaves[i] <> nil then
+      begin
+        CreateEllipse(root^.leaves[i].X, root^.leaves[i].Y, root^.leaves[i].value);
+        CreateLeaves(root^.leaves[i]);
+      end;
+    end;
+end;
+procedure CreateLines(root:pTrie);
+var  I,X1,Y1: Integer;
+begin
+  Form1.Image1.Canvas.Pen.Color := ClBlack;
+  Form1.Image1.Canvas.Pen.Width := 2;
+  if (root^.value = '$') and (length(root^.leaves) = 0) then exit
+  else
+    Form1.Image1.Canvas.LineTo(root^.X, root^.Y);
+  for I := 0 to High(root^.leaves) do
+    begin
+      X1 := root^.X;
+      Y1 := root^.Y;
+      Form1.Image1.Canvas.MoveTo(X1,Y1);
+      if root^.leaves[i] <> nil then
+        begin
+          CreateLines(root^.leaves[i]);
+        end;
+    end;
+end;
+// Рисует через SLEEP
+procedure MakePicture(root:pTrie; flag:boolean);
+var
+  I: Integer;
+begin
+  if length(root^.leaves) = 0 then exit;
+  Form1.Image1.Canvas.Pen.Color := ClBlack;
+  Form1.Image1.Canvas.Pen.Width := 2;
+  Form1.Image1.Canvas.MoveTo(root.X, root.Y);
+  for I := 0 to High(root^.leaves) do
+    begin
+      Form1.Image1.Canvas.MoveTo(root.X, root.Y);
+      if flag = true then
+        begin
+          Application.ProcessMessages;
+          Sleep(1000);
+        end;
+      Form1.Image1.Canvas.LineTo(root^.leaves[i].X, root^.leaves[i].Y);
+      CreateEllipse(root.X, root.Y, root^.value);
+      CreateEllipse(root^.leaves[i].X, root^.leaves[i].Y, root^.leaves[i].value);
+      MakePicture(root^.leaves[i],flag);
+      Form1.Image1.Canvas.Pen.Color := ClBlack;
+      Form1.Image1.Canvas.Pen.Width := 2;
+    end;
+  Form1.Image1.Canvas.Pen.Color := ClBlack;
+  Form1.Image1.Canvas.Pen.Width := 2;
+  Form1.Image1.Canvas.MoveTo(root.X, root.Y);
+end;
+
+
+procedure Delete(var root:pTrie; str:string; depth:integer);
+var i:integer;
+    tmp:pTrie;
+begin
+  for I := 0 to High(root^.leaves) do
+    begin
+      if root^.leaves[i].value = str[depth] then
+        begin
+          Delete(root^.leaves[i], str, depth + 1);
+            if (root^.leaves[i].value = str[depth]) and (length(root^.leaves) = 1) then
+              begin
+                //Dispose(root^.leaves[i]);
+                Setlength(root^.leaves,0);
+                exit;
+              end;
+            if (root^.leaves[i].value = str[depth]) and (length(root^.leaves) > 1) then
+              begin
+                //Dispose(root);
+                tmp := root^.leaves[i];
+                root^.leaves[i] := root^.leaves[high(root^.leaves)];
+                Setlength(root^.leaves, length(root^.leaves)-1);
+                abort;
+              end;
+        end;
+    end;
+end;
+
+
+procedure PaintNewBranch(root:pTrie; str:string; depth:integer);
+var level:integer;
+    tmp:integer;
+begin
+  if depth = 1 then
+    tmp := 175;
+  if depth = 2 then
+    tmp := 125;
+  if depth = 3 then
+    tmp := 75;
+  if depth >= 4 then
+    tmp := 50;
+  Form1.Image1.Canvas.MoveTo(root.X, root.Y);
+  Form1.Image1.Canvas.Pen.Color := ClBlack;
+  Form1.Image1.Canvas.Pen.Width := 2;
+  Form1.Image1.Canvas.LineTo(root^.leaves[high(root^.leaves)].X + tmp,root^.Y + 50);
+
+  Form1.Image1.Canvas.Pen.Color := ClGreen;
+  Form1.Image1.Canvas.Brush.Color := ClWhite;
+  Form1.Image1.Canvas.Ellipse(root^.X - 15, root^.Y - 15, root^.X + 15, root^.Y + 15);
+  Form1.Image1.Canvas.TextOut(root^.X - 3, root^.Y - 6, root^.value);
+
+  Form1.Image1.Canvas.Ellipse(root^.leaves[high(root^.leaves)].X + tmp - 15, root^.Y + 35,
+                              root^.leaves[high(root^.leaves)].X + tmp + 15, root^.Y + 65);
+  Form1.Image1.Canvas.TextOut(root^.leaves[high(root^.leaves)].X + tmp - 3, root^.Y + 44, str[depth]);
+
+
+  Application.ProcessMessages;
+  Sleep(1000);
+  level := 1;
+  //inc(depth);
+  while depth < length(str) do
+    begin
+      Form1.Image1.Canvas.MoveTo(root^.leaves[high(root^.leaves)].X + tmp, root^.Y + (level*50));
+      Form1.Image1.Canvas.Pen.Color := ClBlack;
+      Form1.Image1.Canvas.Pen.Width := 2;
+      Form1.Image1.Canvas.LineTo(root^.leaves[high(root^.leaves)].X + tmp, root^.Y + 50 + (level*50));
+
+      Form1.Image1.Canvas.Pen.Color := ClGreen;
+      Form1.Image1.Canvas.Brush.Color := Clwhite;
+
+      Form1.Image1.Canvas.Ellipse(root^.leaves[high(root^.leaves)].X + tmp - 15, root^.Y - 15 + (level*50),
+                                  root^.leaves[high(root^.leaves)].X + tmp + 15, root^.Y + 15 + (level*50));
+
+      Form1.Image1.Canvas.TextOut(root^.leaves[high(root^.leaves)].X + tmp - 3, root^.Y - 6 + (level*50), str[depth]);
+
+      Form1.Image1.Canvas.Pen.Color := ClGreen;
+      Form1.Image1.Canvas.Brush.Color := Clwhite;
+
+      Form1.Image1.Canvas.Ellipse(root^.leaves[high(root^.leaves)].X + tmp - 15, root^.Y + 35 + (level*50),
+                                  root^.leaves[high(root^.leaves)].X + tmp + 15, root^.Y + 65 + (level*50));
+      Form1.Image1.Canvas.TextOut(root^.leaves[high(root^.leaves)].X + tmp - 3, root^.Y + 44 + (level*50), str[depth+1]);
+
+      Application.ProcessMessages;
+      Sleep(1000);
+
+      inc(level);
+      inc(depth)
+    end;
+end;
+
+
+procedure GreenRed(root:pTrie; str:string; depth:integer);
+var  I: Integer;
+flag:boolean;
+begin
+  flag := false;
+  for I := 0 to high(root^.leaves) do
+    begin
+      Application.ProcessMessages;
+      Sleep(1000);
+      if root^.leaves[i].value = str[depth] then
+        begin
+          // green color
+          Form1.Image1.Canvas.Pen.Color := ClGreen;
+          Form1.Image1.Canvas.Brush.Style := bsClear;
+          Form1.Image1.Canvas.Ellipse(root^.leaves[i].X - 15,root^.leaves[i].Y - 15,
+                                      root^.leaves[i].X + 15,root^.leaves[i].Y + 15);
+          GreenRed(root^.leaves[i],str,depth+1);
+          flag:=true;
+          break;
+        end
+      else
+        begin
+          flag := false;
+          Form1.Image1.Canvas.Pen.Color := ClRed;
+          Form1.Image1.Canvas.Brush.Style := bsClear;
+          Form1.Image1.Canvas.Ellipse(root^.leaves[i].X - 15,root^.leaves[i].Y - 15,
+                                      root^.leaves[i].X + 15,root^.leaves[i].Y + 15);
+          Application.ProcessMessages;
+          Sleep(1000);
+        end;
+      if (root^.leaves[i].value <> str[depth]) and (i = high(root^.leaves))  then
+        begin
+          // red color
+          Form1.Image1.Canvas.Pen.Color := ClRed;
+          Form1.Image1.Canvas.Brush.Style := bsClear;
+          Form1.Image1.Canvas.Ellipse(root^.leaves[i].X - 15,root^.leaves[i].Y - 15,
+                                      root^.leaves[i].X + 15,root^.leaves[i].Y + 15);
+          PaintNewBranch(root,str,depth);
+          break;
+
+        end;
+    end;
+end;
+
+
+procedure CreateCoordinats(var root:pTrie; start,finish,floor:integer);
+var tmp,i,size:integer;
+begin
+  tmp:=length(Tree^.leaves);
+  for I := 0 to High(root^.leaves) do
+    begin
+      root^.leaves[i].Y := 50*floor + 25;
+      if length(root^.leaves) = 1 then
+        begin
+          root^.leaves[0].X := root^.X;
+          CreateCoordinats(root^.leaves[0], start, finish, floor+1);
+        end;
+      size := (finish - start) div length(root^.leaves);
+      root^.leaves[i].X := start + (size*(i+1)) - size div 2;
+      CreateCoordinats(root^.leaves[i], root^.leaves[i].X - size div 2,
+                                        root^.leaves[i].X + size div 2,floor+1);
+    end;
+end;
+
+
+procedure Search(root:pTrie; str:string; depth:integer; var str_search:string);
+var I: Integer;
+    tmp:string;
+begin
+  for I := 0 to High(root^.leaves) do
+    begin
+      if root^.leaves[i].value = str[depth] then
+        begin
+          str_search := str_search + str[depth];
+          Search(root^.leaves[i],str,depth+1,str_search);
+          exit;
+        end;
+    end;
+end;
+
+
+procedure TForm1.ButtonAddClick(Sender: TObject);
+var I: Integer;
+point:integer;
+tmp:string;
+flag,fsleep:boolean;
+begin
+main_i:=1;
+  repeat
+    new_word := InputBox('Add','Введите слово','');
+  until new_word <> '';
+  tmp := new_word;
+
+  new_word := UpperCase(new_word);
+
+  new_word:=new_word + '#';
+
+  Setlength(arr,length(arr)+1);
+  depth := 1;
+  inc(count);
+
+  // подсветка зеленым и красным + дорисовать new_word
+  GreenRed(Tree,new_word,depth);
+
+  // само добавление и сортировка
+  depth:=1;
+  level:=0;
+  Add(Tree,new_word,depth,level);
+  Sort(Tree);
+
+  Form1.ComboBox1.Items.Add(tmp);
+  Form1.ComboBox1.Sorted := true;
+
+  Tree^.X := (Form1.Image1.Width)div 2;
+  Tree^.Y := 25;
+  depth := 1;
+
+  // балансировка
+  if (count >= 1) and (count < 3) then
+    CreateCoordinats(Tree,(Form1.Image1.Width div 3), (Form1.Image1.Width - Form1.Image1.Width div 3), 1);
+  if (count >= 3) and (count < 5) then
+    CreateCoordinats(Tree, (Form1.Image1.Width div 4), (Form1.Image1.Width - Form1.Image1.Width div 4), 1);
+  if (count >= 5) then
+    CreateCoordinats(Tree,0, Form1.Image1.Width-1, 1);
+
+  // закрасить старое
+  Form1.Image1.Canvas.Pen.Color := ClWhite;
+  Form1.Image1.Canvas.Brush.Color := ClWhite;
+  Form1.Image1.Canvas.FillRect(Canvas.ClipRect);
+
+  // поставить курсор на ROOT и нарисовать его
+  Form1.Image1.Canvas.MoveTo(Form1.Image1.Width div 2,25);
+  Form1.Image1.Canvas.Pen.Width := 2;
+  CreateEllipse(Tree.X, Tree.Y, Tree^.value);
+
+// нарисовать c задержкой, но отбалансированый
+//  Application.ProcessMessages;
+//  Sleep(1000);
+  if count = 1 then
+    fsleep := true
+  else
+    fsleep := false;
+  MakePicture(Tree,fsleep);
+end;
+
+
+procedure GreenRedDelete(root:pTrie; str:string; depth:integer);
+var I: Integer;
+tmp:string;
+begin
+  if root^.value = '#' then
+    begin
+      if root^.value <> str[depth] then
+        fword := false;
+      exit;
+    end;
+  for I := 0 to High(root^.leaves) do
+    begin
+      Application.ProcessMessages;
+      Sleep(1000);
+      if root^.leaves[i].value = str[depth] then
+        begin
+          // подсветили зеленым если совпадает
+          Form1.Image1.Canvas.Pen.Color := ClGreen;
+          Form1.Image1.Canvas.Brush.Style := bsClear;
+          Form1.Image1.Canvas.Ellipse(root^.leaves[i].X - 15,root^.leaves[i].Y - 15,
+                                      root^.leaves[i].X + 15,root^.leaves[i].Y + 15);
+          GreenRedDelete(root^.leaves[i],str,depth+1);
+          //fword := true;
+          Application.ProcessMessages;
+          Sleep(1000);
+          abort;
+          break;
+        end
+      else
+        begin
+          // подсветили красным если не совпадает
+          //fword := true;
+          Form1.Image1.Canvas.Pen.Color := ClRed;
+          Form1.Image1.Canvas.Brush.Style := bsClear;
+          Form1.Image1.Canvas.Ellipse(root^.leaves[i].X - 15,root^.leaves[i].Y - 15,
+                                      root^.leaves[i].X + 15,root^.leaves[i].Y + 15);
+        end;
+      if (root^.leaves[i].value <> str[depth]) and (i = high(root^.leaves)) then
+        begin
+        // если конец уровня и он не равен букве слова, выводим сообщения.
+          //Application.ProcessMessages;
+          //Sleep(1000);
+          //MakePicture(Tree,false);
+          break;
+        end;
+
+    end;
+end;
+
+
+procedure TForm1.ButtonDeleteClick(Sender: TObject);
+var str,str1:string;
+  tmp:integer;
+begin
+  repeat
+    word_search := InputBox('Delete','Введите слово','');
+  until word_search <> '';
+  if count = 0 then
+    begin
+      ShowMessage('Дерево пустое. Добавьте несколько слов и повторите попытку.');
+      exit;
+    end;
+  word_search := UpperCase(word_search);
+  str := word_search + ' - нет в дереве.';
+  depth := 1;
+  fword := true;
+  try
+    GreenRedDelete(Tree,word_search + '#',depth);
+  Except
+    On E : Exception do //ShowMessage(E.Message + ' - исключение произошло');
+  end;
+  if fword = false then
+    begin
+      depth := 1;
+      try
+        Delete(Tree,word_search + '#' ,depth);
+      Except
+        On E : Exception do //ShowMessage(E.Message + ' - исключение произошло');
+      end;
+      Sort(Tree);
+      dec(count);
+      tmp := Form1.ComboBox1.Items.IndexOf(word_search);
+      Form1.ComboBox1.Items.Delete(tmp);
+    end
+  else
+    begin
+      ShowMessage(str);
+      Application.ProcessMessages;
+      Sleep(1000);
+      MakePicture(Tree,false);
+    end;
+
+
+  Application.ProcessMessages;
+  Sleep(1000);
+  if (count >= 0) and (count < 3) then
+    CreateCoordinats(Tree,(Form1.Image1.Width div 3), (Form1.Image1.Width - Form1.Image1.Width div 3), 1);
+  if (count >= 3) and (count < 5) then
+    CreateCoordinats(Tree, (Form1.Image1.Width div 4), (Form1.Image1.Width - Form1.Image1.Width div 4), 1);
+  if (count >= 5) then
+    CreateCoordinats(Tree,0, Form1.Image1.Width-1, 1);
+
+  Form1.Image1.Canvas.Pen.Color := ClWhite;
+  Form1.Image1.Canvas.Brush.Color := ClWhite;
+  Form1.Image1.Canvas.FillRect(Canvas.ClipRect); 
+
+
+  Form1.Image1.Canvas.Pen.Color := ClBlue;
+  Form1.Image1.Canvas.Brush.Color := ClWhite;
+  CreateEllipse(Tree.X, Tree.Y, Tree.value);
+  MakePicture(Tree,false);
+
+end;
+
+
+procedure TForm1.ButtonFindClick(Sender: TObject);
+var str:string;
+begin
+  repeat
+    word_search := InputBox('Find','Введите слово','');
+  until word_search <> '';
+  word_search := UpperCase(word_search);
+  str := word_search + ' - нет в дереве.';
+  depth := 1;
+  fword := true;
+  try
+    GreenRedDelete(Tree,word_search + '#',depth);
+  Except
+    On E : Exception do //ShowMessage(E.Message + ' - исключение произошло');
+  end;
+  if fword = false then
+    begin
+      Application.ProcessMessages;
+      Sleep(2000);
+      MakePicture(Tree, false);
+    end
+  else
+    begin
+      ShowMessage(str);
+      Application.ProcessMessages;
+      Sleep(1000);
+      MakePicture(Tree,false);
+    end;
+end;
+
+
+procedure PaintBranch(root:pTrie; str:string; depth:integer);
+var I:integer;
+begin
+if root^.value = '#' then exit;
+  for I := 0 to High(root^.leaves) do
+    begin
+      if root^.leaves[i].value = str[depth] then
+        begin
+          Form1.Image1.Canvas.Ellipse(root^.leaves[i].X - 15,root^.leaves[i].Y - 15,
+                                      root^.leaves[i].X + 15,root^.leaves[i].Y + 15);
+          PaintBranch(root^.leaves[i], str, depth+1);
+        end;
+    end;
+end;
+
+
+procedure TForm1.ShowClick(Sender: TObject);
+var str:string;
+depth:integer;
+begin
+  str := Form1.ComboBox1.Text;
+  str := UpperCase(str);
+  if str = '' then
+    begin
+      Form1.Image1.Canvas.Pen.Width := 2;
+      MakePicture(Tree,false);
+    end;
+  if str <> '' then
+    begin
+
+      depth := 1;
+      //Form1.Image1.Canvas.Pen.Color := ClFuchsia;
+      //Form1.Image1.Canvas.Pen.Width := 3;
+      Form1.Image1.Canvas.Pen.Color := ClLime;
+      Form1.Image1.Canvas.Brush.Style := bsClear;
+      Form1.Image1.Canvas.Ellipse(Tree^.X - 15,Tree^.Y - 15, Tree^.X + 15,Tree^.Y + 15);
+      PaintBranch(Tree, str + '#', depth);
+    end;
+  Application.ProcessMessages;
+  Sleep(2000);
+  MakePicture(Tree,false);
+end;
+
+
+procedure TForm1.FormCreate(Sender: TObject);
+var str:string;
+begin
+  Form1.WindowState := wsMaximized;
+  Form1.Width := Screen.Width;
+  Form1.height := Screen.Height;
+  Form1.BorderStyle := bsSingle;
+  ShowWindow(Form1.Handle,SW_MAXIMIZE);
+  Form1.Color := ClSkyBlue;
+
+
+  Form1.Image1.Width := Screen.Width - Form1.Panel1.Width - 10;
+  Form1.Image1.Height := Screen.Height - 53;
+
+  Form1.Image1.Canvas;
+  count := 0;
+  New(Tree);
+  Tree^.value := '$';
+  flagdelete := false;
+  Form1.Image1.Canvas.Pen.Width := 2;
+  CreateEllipse((Form1.Image1.Width) div 2,25,Tree^.value);
+
+  str := '';
+  Form1.ComboBox1.Items.Add(str);
+end;
+
+procedure TForm1.Label1Click(Sender: TObject);
+begin
+  ShowMessage('Нагруженное дерево(также префиксное дерево, бор, Trie) – структура данных, позволяющая хранить ассоциативный массив,' + 'ключами которого являются строки. Впервые была представлена Эдвардом Фредкином (Edward Fredkin) в 1960 году.' + ' Виды префиксных деревьев: Обычное (несжатое), Сжатое, Patricia, Суффиксное (несжатое), Cуффиксное (Patricia). ' + 'Операции с префиксным деревом: Добавление строки, Поиск строки, Удаление строки.');
+end;
+
+end.
